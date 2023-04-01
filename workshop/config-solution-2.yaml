@@ -1,0 +1,23 @@
+scenarios:
+  capex:
+    techs: ["SPV", "HYD", "GAS"]
+    scale: [0.25, 4]
+  emission_penalty:
+    start: [0, 50, 100]
+    end: [100]
+  demand:
+    start: 0.5
+    end: 4.5
+    step: 1
+
+# scenarios:
+#   capex:
+#     techs: ["SPV", "HYD", "GAS"]
+#     scale: [0.25, 0.50, 0.75, 2, 4]
+#   emission_penalty:
+#     start: [0, 50, 100]
+#     end: [100]
+#   demand:
+#     start: 0.5
+#     end: 4.5
+#     step: 0.5

@@ -1,0 +1,127 @@
+import os
+import shutil
+from snakemake.utils import min_version
+min_version("6.0")
+
+# constants
+OSEMOSYS_CSVS = os.listdir("resources/data")
+CSVS_TO_CREATE = [
+    "SpecifiedAnnualDemand.csv",
+    "EmissionsPenalty.csv",
+    "VariableCost.csv",
+    "CapitalCost.csv"
+]
+CSVS_TO_COPY = [f for f in OSEMOSYS_CSVS if f not in CSVS_TO_CREATE]
+
+rule all:
+    input:
+        "results/scenario/AnnualCapacity.png"
+
+rule create_scenario_dir:
+    output:
+        directory("results/scenario/data")
+    shell:
+        "mkdir output"
+
+rule copy_csv_files:
+    input:
+        expand("resources/data/{csv}", csv=OSEMOSYS_CSVS)
+    output:
+        expand("results/scenario/data/{csv}", csv=CSVS_TO_COPY)
+    params:
+        folder = directory("results/scenario/data")
+    run:
+        for path in input:
+            _, f = os.path.split(path) # f will be in form of "file.csv"
+            if f in CSVS_TO_CREATE:
+                continue
+            shutil.copy(path, os.path.join(params.folder, f))
+
+rule capital_cost:
+    input:
+        "resources/data/CapitalCost.csv"
+    output:
+        "results/scenario/data/CapitalCost.csv"
+    params:
+        technology = "SPV",
+        scaling_factor = 1.5
+    shell: 
+        "python workflow/scripts/capital_costs.py {input} {output} {params.technology} {params.scaling_factor}"
+
+rule emission_penalty:
+    input:
+        "resources/data/EmissionsPenalty.csv"
+    output:
+        "results/scenario/data/EmissionsPenalty.csv"
+    params:
+        start = 0,
+        end = 100
+    shell: 
+        "python workflow/scripts/emission_penalty.py {input[0]} {output[0]} {params.start} {params.end}"
+
+rule demand:
+    input:
+        "resources/data/SpecifiedAnnualDemand.csv"
+    output:
+        "results/scenario/data/SpecifiedAnnualDemand.csv"
+    params:
+        scaling_factor = 2,
+    shell: 
+        "python workflow/scripts/demand.py {input} {output} {params.scaling_factor}"
+
+rule variable_cost:
+    input:
+        var_cost = "resources/data/VariableCost.csv",
+        demand = "results/scenario/data/SpecifiedAnnualDemand.csv"
+    output:
+        "results/scenario/data/VariableCost.csv"
+    shell: 
+        "python workflow/scripts/variable_costs.py {input.demand} {input.var_cost} {output}"
+
+rule otoole:
+    input:
+        expand("results/scenario/data/{csv}", csv=OSEMOSYS_CSVS)
+    output:
+        "results/scenario/data.txt"
+    params:
+        csv_dir = "results/scenario/data",
+        config="resources/config.yaml"
+    shell:
+        "otoole convert csv datafile {params.csv_dir} {output} {params.config}"
+
+rule results_dir:
+    input:
+        "results/scenario"
+    output:
+        directory("results/scenario/results")
+    shell:
+        "mkdir {output}"
+
+rule solve:
+    input: 
+        "results/scenario/data.txt"
+    output:
+        "results/scenario/results/TotalCapacityAnnual.csv"
+    params:
+        model="resources/osemosys.txt"
+    shell:
+        # since OSeMOSYS using GLPK requires a results directory from the 
+        # place of running, we change the working directory to the location of the scenario
+        """
+        FILE="resources/data.txt" &&
+        f="$(basename -- $FILE)" &&
+        cd results/scenario &&
+        glpsol -m ../../{params.model} -d $f
+        """
+
+rule plot:
+    input:
+        "results/scenario/results/TotalCapacityAnnual.csv"
+    output:
+        "results/scenario/AnnualCapacity.png"
+    shell:
+        "python workflow/scripts/plot_capacity.py {input} {output} 'Scenario'"
+
+rule clean:
+    shell:
+        "rm -rf results/*"

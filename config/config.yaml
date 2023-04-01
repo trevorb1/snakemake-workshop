@@ -1,0 +1,29 @@
+scenarios:
+  scenario_one:
+    capex:
+      tech: "SPV"
+      scale: 1.5
+    emission_penalty:
+      start: 0
+      end: 100
+    demand:
+      scale: 2
+  scenario_two:
+    capex:
+      tech: "HYD"
+      scale: 5
+    emission_penalty:
+      start: 0
+      end: 10
+    demand:
+      scale: 3
+  scenario_three:
+    capex:
+      tech: "GAS"
+      scale: 2
+    emission_penalty:
+      start: 25
+      end: 75
+    demand:
+      scale: 0.80
+    

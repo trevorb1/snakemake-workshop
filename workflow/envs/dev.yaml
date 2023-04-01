@@ -1,0 +1,17 @@
+name: snakemake-workshop-dev
+
+channels:
+  - bioconda
+  - conda-forge
+
+dependencies: 
+  - python>=3.8
+  - pip
+  - ipython
+  - jupyter
+  - snakemake-minimal
+  - pandas
+  - matplotlib
+
+  - pip:
+    - otoole>=1.0.0
