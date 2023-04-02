@@ -1,0 +1,137 @@
+import os
+import shutil
+import numpy as np
+from snakemake.utils import min_version
+min_version("6.0")
+
+# constants
+OSEMOSYS_CSVS = os.listdir("resources/data")
+CSVS_TO_CREATE = [
+    "SpecifiedAnnualDemand.csv",
+    "EmissionsPenalty.csv",
+    "VariableCost.csv",
+    "CapitalCost.csv"
+]
+CSVS_TO_COPY = [f for f in OSEMOSYS_CSVS if f not in CSVS_TO_CREATE]
+
+configfile: "config/config.yaml"
+TECHS = config["scenarios"]["capex"]["techs"]
+CAPEX_SCALES = config["scenarios"]["capex"]["scale"]
+EP_STARTS = config["scenarios"]["emission_penalty"]["start"]
+EP_ENDS = config["scenarios"]["emission_penalty"]["end"]
+D_SCALES = list(np.arange(
+    config["scenarios"]["demand"]["start"], 
+    config["scenarios"]["demand"]["end"], 
+    config["scenarios"]["demand"]["step"])
+)
+
+rule all:
+    input:
+        expand("results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/AnnualCapacity.png", 
+            d_scale=D_SCALES,
+            tech=TECHS,
+            capex_scale=CAPEX_SCALES,
+            ep_start=EP_STARTS,
+            ep_end=EP_ENDS,
+        )
+
+rule create_scenario_dir:
+    output:
+        directory("results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data")
+    shell:
+        "mkdir output"
+
+rule copy_csv_files:
+    input:
+        expand("resources/data/{csv}", csv=OSEMOSYS_CSVS)
+    output:
+        expand("results/d{{d_scale}}/capex_{{tech}}{{capex_scale}}/ep{{ep_start}}/ep{{ep_end}}/data/{csv}", csv=CSVS_TO_COPY)
+    params:
+        folder = directory("results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data")
+    run:
+        for path in input:
+            _, f = os.path.split(path) # f will be in form of "file.csv"
+            if f in CSVS_TO_CREATE:
+                continue
+            shutil.copy(path, os.path.join(params.folder, f))
+
+rule capital_cost:
+    input:
+        "resources/data/CapitalCost.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/CapitalCost.csv"
+    shell: 
+        "python workflow/scripts/capital_costs.py {input} {output} {wildcards.tech} {wildcards.capex_scale}"
+
+rule emission_penalty:
+    input:
+        "resources/data/EmissionsPenalty.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/EmissionsPenalty.csv"
+    shell: 
+        "python workflow/scripts/emission_penalty.py {input} {output} {wildcards.ep_start} {wildcards.ep_end}"
+
+rule demand:
+    input:
+        "resources/data/SpecifiedAnnualDemand.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/SpecifiedAnnualDemand.csv"
+    shell: 
+        "python workflow/scripts/demand.py {input} {output} {wildcards.d_scale}"
+
+rule variable_cost:
+    input:
+        var_cost = "resources/data/VariableCost.csv",
+        demand = "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/SpecifiedAnnualDemand.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/VariableCost.csv"
+    shell: 
+        "python workflow/scripts/variable_costs.py {input.demand} {input.var_cost} {output}"
+
+rule otoole:
+    input:
+        expand("results/d{{d_scale}}/capex_{{tech}}{{capex_scale}}/ep{{ep_start}}/ep{{ep_end}}/data/{csv}", csv=OSEMOSYS_CSVS)
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data.txt"
+    params:
+        csv_dir = "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data",
+        config="resources/config.yaml"
+    shell:
+        "otoole convert csv datafile {params.csv_dir} {output} {params.config}"
+
+rule results_dir:
+    input:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}"
+    output:
+        directory("results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/results")
+    shell:
+        "mkdir {output}"
+
+rule solve:
+    input: 
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data.txt"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/results/TotalCapacityAnnual.csv"
+    params:
+        model="resources/osemosys.txt"
+    shell:
+        # since OSeMOSYS using GLPK requires a results directory from the 
+        # place of running, we change the working directory to the location of the scenario
+        """
+        FILE="resources/data.txt" &&
+        f="$(basename -- $FILE)" &&
+        cd results/d{wildcards.d_scale}/capex_{wildcards.tech}{wildcards.capex_scale}/ep{wildcards.ep_start}/ep{wildcards.ep_end}/ &&
+        glpsol -m ../../../../../{params.model} -d $f
+        """
+
+rule plot:
+    input:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/results/TotalCapacityAnnual.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/AnnualCapacity.png"
+    shell:
+        "python workflow/scripts/plot_capacity.py {input} {output} d{wildcards.d_scale}/capex_{wildcards.tech}{wildcards.capex_scale}/ep{wildcards.ep_start}/ep{wildcards.ep_end}/"
+
+rule clean:
+    shell:
+        "rm -rf results/*"

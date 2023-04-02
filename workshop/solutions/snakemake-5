@@ -55,11 +55,49 @@ rule copy_csv_files:
                 continue
             shutil.copy(path, os.path.join(params.folder, f))
 
+rule create_temp_dir:
+    output:
+        directory("results/temp")
+    shell:
+        "mkdir output"
+
+rule copy_demand_data:
+    input:
+        "results/temp/demand_{d_scale}.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/SpecifiedAnnualDemand.csv"
+    shell:
+        "cp {input} {output}"
+
+rule copy_capex_data:
+    input:
+        "results/temp/capex_{tech}_{capex_scale}.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/CapitalCost.csv"
+    shell:
+        "cp {input} {output}"
+
+rule copy_var_cost_data:
+    input:
+        "results/temp/var_cost_{d_scale}.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/VariableCost.csv"
+    shell:
+        "cp {input} {output}"
+
+rule copy_emission_data:
+    input:
+        "results/temp/ep_{ep_start}_{ep_end}.csv"
+    output:
+        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/EmissionsPenalty.csv"
+    shell:
+        "cp {input} {output}"
+
 rule capital_cost:
     input:
         "resources/data/CapitalCost.csv"
     output:
-        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/CapitalCost.csv"
+        "results/temp/capex_{tech}_{capex_scale}.csv"
     shell: 
         "python workflow/scripts/capital_costs.py {input} {output} {wildcards.tech} {wildcards.capex_scale}"
 
@@ -67,7 +105,7 @@ rule emission_penalty:
     input:
         "resources/data/EmissionsPenalty.csv"
     output:
-        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/EmissionsPenalty.csv"
+        "results/temp/ep_{ep_start}_{ep_end}.csv"
     shell: 
         "python workflow/scripts/emission_penalty.py {input} {output} {wildcards.ep_start} {wildcards.ep_end}"
 
@@ -75,16 +113,16 @@ rule demand:
     input:
         "resources/data/SpecifiedAnnualDemand.csv"
     output:
-        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/SpecifiedAnnualDemand.csv"
+        "results/temp/demand_{d_scale}.csv"
     shell: 
         "python workflow/scripts/demand.py {input} {output} {wildcards.d_scale}"
 
 rule variable_cost:
     input:
         var_cost = "resources/data/VariableCost.csv",
-        demand = "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/SpecifiedAnnualDemand.csv"
+        demand = "results/temp/demand_{d_scale}.csv"
     output:
-        "results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data/VariableCost.csv"
+        "results/temp/var_cost_{d_scale}.csv"
     shell: 
         "python workflow/scripts/variable_costs.py {input.demand} {input.var_cost} {output}"
 
@@ -135,7 +173,3 @@ rule plot:
 rule clean:
     shell:
         "rm -rf results/*"
-
-"""
-d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/
-"""
