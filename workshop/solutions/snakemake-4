@@ -39,7 +39,7 @@ rule create_scenario_dir:
     output:
         directory("results/d{d_scale}/capex_{tech}{capex_scale}/ep{ep_start}/ep{ep_end}/data")
     shell:
-        "mkdir output"
+        "mkdir {output}"
 
 rule copy_csv_files:
     input:

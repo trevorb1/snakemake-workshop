@@ -21,7 +21,7 @@ rule create_scenario_dir:
     output:
         directory("results/scenario/data")
     shell:
-        "mkdir output"
+        "mkdir {output}"
 
 rule copy_csv_files:
     input:
