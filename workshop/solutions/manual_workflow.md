@@ -1,6 +1,4 @@
-Below are the steps to run the workflow manually 
-
-0. cd ~/snakemake-workshop
+Below are the steps to run the workflow manually from the root directory
 
 1. mkdir scenarios
 
