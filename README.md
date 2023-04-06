@@ -13,8 +13,9 @@ run the code, install the conda environment using the command:
 conda env create -f workflow/envs/env.yaml 
 ```
 
-To view the Jupyter Notebook as slides, run the command
+To view the Jupyter Notebook as slides, install jupyter and run the command:
 
 ```bash 
+conda install jupyter
 jupyter nbconvert workshop.ipynb --to slides --post serve
 ```
